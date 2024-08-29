@@ -8,11 +8,6 @@ import os
 
 
 ################
-
-
-
-
-
 def csv_serialize_predict(textContent, line_index):
     # Parse the date
     last_line = read_line(textContent, line_index)
@@ -67,9 +62,6 @@ app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
 @app.blob_output(arg_name="outputblob",
                 path="zsblob/profiles1.csv",
                 connection="AzureWebJobsStorage")
-# @app.timer_trigger(schedule="0 */5 * * * *",
-#               arg_name="mytimer",
-#               run_on_startup=True)
 def main(req: func.HttpRequest, inputblob: str, outputblob: func.Out[str]):
     logging.info(f'Python Queue trigger function processed {len(inputblob)} {inputblob} bytes')
 
