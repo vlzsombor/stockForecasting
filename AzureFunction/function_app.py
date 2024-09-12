@@ -54,62 +54,6 @@ class DataRecord:
 app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
 
 
-@app.function_name(name="BlobOutput1")
-@app.route(route="file")
-@app.blob_input(arg_name="inputblob",
-                path="zsblob/profiles1.csv",
-                connection="AzureWebJobsStorage")
-@app.blob_output(arg_name="outputblob",
-                path="zsblob/profiles1.csv",
-                connection="AzureWebJobsStorage")
-def main(req: func.HttpRequest, inputblob: str, outputblob: func.Out[str]):
-    logging.info(f'Python Queue trigger function processed {len(inputblob)} {inputblob} bytes')
-
-    tickerSymbol = 'AAPL'
-    data = yf.Ticker(tickerSymbol)
-    prices = data.history(period="3mo").Close
-    returns = prices.pct_change().dropna()
-
-    order = (5,0,0)  
-    thresh = 0.0005
-    last_line = csv_serialize_predict(inputblob, -1)
-    second_last_line = csv_serialize_full(inputblob, -2)
-
-    if last_line.action == 'b':
-        sell_price = prices.values[-1]
-        ret = (sell_price-last_line.buy_price)/last_line.buy_price
-        amt = (1+ret) * second_last_line.total_amount
-        inputblob = inputblob + "," + str(prices.index[-1]) + "," + str(sell_price) + "," + str(amt) + "," + str(ret)
-    else:
-        sell_price = prices.values[-1]
-        ret = (sell_price-last_line.buy_price)/last_line.buy_price
-        amt = (1+ret) * second_last_line.total_amount
-        inputblob = inputblob + "," + str(prices.index[-1]) + "," + str(sell_price) + "," + str(second_last_line.total_amount) + "," + str(second_last_line.total_return)
-
-    print(inputblob)
-
-    if type(order) == tuple:
-        try:
-            #fit model
-            a = returns[:second_last_line.date]
-            model = ARIMA(a, order=order).fit()
-            
-            #get forecast
-            pred = model.forecast().values[0]
-
-        except Exception as ex:
-            print(str(ex))
-            pred = thresh - 1
-
-    if pred > thresh:
-        inputblob = inputblob + os.linesep + 'b' + "," + str(prices.values[-1]) + "," + str(pred)
-    else:
-        inputblob = inputblob + os.linesep + 'n' + "," + str(prices.values[-1]) + "," + str(pred)
-
-    outputblob.set(inputblob)
-    return inputblob
-
-
 
 @app.timer_trigger(schedule="0 0 5 * * *", 
                    arg_name="myTimer", 
@@ -140,6 +84,10 @@ def timer_trigger(myTimer: func.TimerRequest,
     last_line = csv_serialize_predict(inputblob, -1)
     second_last_line = csv_serialize_full(inputblob, -2)
 
+    # It is weekend
+    if str(prices.index[-1]) == str(second_last_line.date):
+        return
+
     if last_line.action == 'b':
         sell_price = prices.values[-1]
         ret = (sell_price-last_line.buy_price)/last_line.buy_price
@@ -147,8 +95,7 @@ def timer_trigger(myTimer: func.TimerRequest,
         inputblob = inputblob + "," + str(prices.index[-1]) + "," + str(sell_price) + "," + str(amt) + "," + str(ret)
     else:
         sell_price = prices.values[-1]
-        ret = (sell_price-last_line.buy_price)/last_line.buy_price
-        amt = (1+ret) * second_last_line.total_amount
+
         inputblob = inputblob + "," + str(prices.index[-1]) + "," + str(sell_price) + "," + str(second_last_line.total_amount) + "," + str(second_last_line.total_return)
 
     print(inputblob)
